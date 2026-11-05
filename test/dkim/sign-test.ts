@@ -181,6 +181,34 @@ describe('DKIM Sign Tests', () => {
             'DKIM-Signature:v=1;a=rsa-sha256;c=relaxed/relaxed;d=xn--mriaad-polteism-zvbj.info;q=dns/txt;s=dkim;bh=z6TUz85EdYrACGMHYgZhJGvVy5oQI0dooVMKa2ZT7c4=;h=from:to;b=oBJ1MkwEkftfXa2AK4Expjp2xgIcAR43SVrftSEHVQ6F1SlGjP3EKP+cn/hLkhUel3rY0icthk/myDu6uhTBmM6DMtzIBW/7uQd6q9hfgaiYnw5Iew2tZc4TzBEYSdKi'
         );
     });
+
+    it('should encode the domain the same way as the address headers', () => {
+        // the bundled codec encodes code points as supplied, so an upper case or a mapped
+        // code point became an A-label for a different domain than the one in From:, and
+        // the signature could not be verified against the domain the message came from
+        const headerLines = [
+            {
+                key: 'from',
+                line: 'From: andris@node.ee'
+            }
+        ];
+
+        for (const [domainName, expected] of [
+            ['JÕGEVA.EE', 'xn--jgeva-dua.ee'],
+            ['jõgeva.ee', 'xn--jgeva-dua.ee'],
+            ['NODE.EE', 'node.ee'],
+            ['compa­ny.com', 'company.com'],
+            ['ﬁnance.example', 'finance.example']
+        ]) {
+            const dkimField = sign(headerLines, 'sha256', 'z6TUz85EdYrACGMHYgZhJGvVy5oQI0dooVMKa2ZT7c4=', {
+                domainName,
+                keySelector: 'dkim',
+                privateKey
+            }) as string;
+
+            assert.ok(dkimField.replace(/\r?\n(?=[ \t])/g, '').indexOf('d=' + expected + '; q=dns/txt;') >= 0, domainName);
+        }
+    });
 });
 
 describe('DKIM relaxed header canonicalization', () => {
